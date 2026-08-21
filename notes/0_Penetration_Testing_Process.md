@@ -3,7 +3,7 @@
     - Penetration Testing Process
     - [Getting Started](1_Getting_Started.md)
 - **Reconnaissance, Enumeration \& Attack Planning**
-    - Network Enumeration with Nmap
+    - [Network Enumeration with Nmap](2_Network_Enumeration_With_Nmap.md)
     - Footprinting
     - Information Gathering (Web Edition)
     - Vulnerability Assessment
